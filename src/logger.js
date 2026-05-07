@@ -1,5 +1,5 @@
 // logger.js - Einfaches Logger-Utility mit Timestamps
-import { writeFileSync, appendFileSync, existsSync } from 'fs';
+import { mkdirSync, appendFileSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,9 +11,9 @@ const LOG_FILE = `${__dirname}/../logs/app.log`;
 const logsDir = dirname(LOG_FILE);
 if (!existsSync(logsDir)) {
   try {
-    writeFileSync(LOG_FILE, '');
+    mkdirSync(logsDir, { recursive: true });
   } catch (e) {
-    // Ignorieren, falls Verzeichnis existiert
+    // ignore
   }
 }
 
