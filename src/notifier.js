@@ -1,6 +1,6 @@
 // notifier.js - Verwaltet Telegram-Benachrichtigungen
 import { logger } from './logger.js';
-import { recordNotification, hasBeenNotified } from './storage.js';
+import { getStorage, saveStorage } from './storage.js';
 
 /**
  * Sendet eine Benachrichtigung über Telegram Bot API
@@ -99,10 +99,20 @@ export const notifyNewAppointments = async (newAppointments) => {
     return false;
   }
 
-  // Filtere bereits benachrichtigte Termine
+  const storage = getStorage();
+  const now = Date.now();
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+  if (!storage.lastNotifications) storage.lastNotifications = [];
+  storage.lastNotifications = storage.lastNotifications.filter(
+    (n) => new Date(n.timestamp).getTime() > weekAgo
+  );
+
+  const notifiedKeys = new Set(storage.lastNotifications.map((n) => n.appointmentKey));
+
   const appointmentsToNotify = newAppointments.filter((apt) => {
     const key = `${apt.date}|${apt.time}`;
-    if (hasBeenNotified(key)) {
+    if (notifiedKeys.has(key)) {
       logger.debug('Termin bereits benachrichtigt', { key });
       return false;
     }
@@ -120,14 +130,12 @@ export const notifyNewAppointments = async (newAppointments) => {
     const success = await sendTelegramNotification(message);
 
     if (success) {
-      // Markiere alle benachrichtigten Termine
+      const timestamp = new Date().toISOString();
       appointmentsToNotify.forEach((apt) => {
-        const key = `${apt.date}|${apt.time}`;
-        recordNotification(key);
+        storage.lastNotifications.push({ appointmentKey: `${apt.date}|${apt.time}`, timestamp });
       });
-      logger.info('Benachrichtigungen versendet', {
-        count: appointmentsToNotify.length,
-      });
+      saveStorage(storage);
+      logger.info('Benachrichtigungen versendet', { count: appointmentsToNotify.length });
       return true;
     }
 

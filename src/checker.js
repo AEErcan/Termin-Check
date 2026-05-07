@@ -1,6 +1,6 @@
 // checker.js - Playwright-Logik für Webseiten-Überwachung
 import { chromium } from 'playwright';
-import { existsSync, mkdirSync } from 'fs';
+import { mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
@@ -8,20 +8,12 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SCREENSHOTS_DIR = join(__dirname, '..', 'screenshots');
+const DEBUG = process.env.DEBUG === 'true';
 
-const isDebug = () => process.env.DEBUG === 'true';
-
-/**
- * Speichert einen Screenshot mit Zeitstempel
- * @param {Page} page
- * @param {string} label - z.B. "01-start", "fehler-kein-button"
- */
 const screenshot = async (page, label) => {
-  if (!isDebug()) return;
+  if (!DEBUG) return;
   try {
-    if (!existsSync(SCREENSHOTS_DIR)) {
-      mkdirSync(SCREENSHOTS_DIR, { recursive: true });
-    }
+    mkdirSync(SCREENSHOTS_DIR, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
     const file = join(SCREENSHOTS_DIR, `${ts}_${label}.png`);
     await page.screenshot({ path: file, fullPage: true });
@@ -61,16 +53,6 @@ export const closeBrowser = async () => {
   }
 };
 
-const waitForPageLoad = async (page, timeout = 30000) => {
-  try {
-    await page.waitForLoadState('networkidle', { timeout }).catch(() => {
-      logger.debug('Network nicht idle innerhalb des Timeouts');
-    });
-    logger.debug('Seite vollständig geladen');
-  } catch (error) {
-    logger.warn('Fehler beim Warten auf Seitenladung', { error: error.message });
-  }
-};
 
 /**
  * Navigiert durch die Terminbuchungs-Seite und extrahiert verfügbare Termine
@@ -165,68 +147,44 @@ const extractAppointments = async (page) => {
     const appointments = await page.evaluate(() => {
       const slots = [];
       const seen = new Set();
+      const DATE_RE = /(\d{2}\.\d{2}\.\d{4})/;
+      const TIME_RE = /(\d{2}:\d{2})/;
+
+      const isDisabled = (el) =>
+        el.disabled ||
+        el.classList.contains('disabled') ||
+        el.classList.contains('unavailable') ||
+        el.classList.contains('empty') ||
+        el.getAttribute('aria-disabled') === 'true';
 
       const addSlot = (date, time, source) => {
         if (!date) return;
         const key = `${date}|${time}`;
         if (seen.has(key)) return;
         seen.add(key);
-        slots.push({
-          date,
-          time: time || '',
-          location: 'Köln KFZ-Zulassung',
-          description: 'Anmeldung Gebrauchtfahrzeug (Umschreibung)',
-          source,
-        });
+        slots.push({ date, time: time || '', location: 'Köln KFZ-Zulassung', description: 'Anmeldung Gebrauchtfahrzeug (Umschreibung)', source });
       };
 
-      // Versuch 1: Elemente mit data-date Attribut
       document.querySelectorAll('[data-date]').forEach((el) => {
-        const isDisabled =
-          el.disabled ||
-          el.classList.contains('disabled') ||
-          el.classList.contains('unavailable') ||
-          el.getAttribute('aria-disabled') === 'true';
-        if (!isDisabled) {
+        if (!isDisabled(el))
           addSlot(el.getAttribute('data-date'), el.getAttribute('data-time') || '', 'data-date');
-        }
       });
 
-      // Versuch 2: Kalender-Zellen mit DD.MM.YYYY Text
       if (slots.length === 0) {
-        const datePattern = /(\d{2}\.\d{2}\.\d{4})/;
-        const timePattern = /(\d{2}:\d{2})/;
-
         document.querySelectorAll('td, .calendar-day, .day, [role="gridcell"]').forEach((el) => {
-          const isDisabled =
-            el.classList.contains('disabled') ||
-            el.classList.contains('unavailable') ||
-            el.classList.contains('empty') ||
-            el.getAttribute('aria-disabled') === 'true';
-          if (isDisabled) return;
-
+          if (isDisabled(el)) return;
           const text = el.textContent.trim();
-          const dateMatch = text.match(datePattern);
-          const timeMatch = text.match(timePattern);
-          if (dateMatch) {
-            addSlot(dateMatch[1], timeMatch ? timeMatch[1] : '', 'calendar-cell');
-          }
+          const d = text.match(DATE_RE);
+          if (d) addSlot(d[1], (text.match(TIME_RE) || [])[1] || '', 'calendar-cell');
         });
       }
 
-      // Versuch 3: Klickbare Buttons mit Datumsinformation
       if (slots.length === 0) {
-        const datePattern = /(\d{2}\.\d{2}\.\d{4})/;
-        const timePattern = /(\d{2}:\d{2})/;
-
         document.querySelectorAll('button:not([disabled]), a[href]').forEach((el) => {
-          if (el.classList.contains('disabled')) return;
+          if (isDisabled(el)) return;
           const text = el.textContent.trim();
-          const dateMatch = text.match(datePattern);
-          const timeMatch = text.match(timePattern);
-          if (dateMatch) {
-            addSlot(dateMatch[1], timeMatch ? timeMatch[1] : '', 'button');
-          }
+          const d = text.match(DATE_RE);
+          if (d) addSlot(d[1], (text.match(TIME_RE) || [])[1] || '', 'button');
         });
       }
 
@@ -277,7 +235,7 @@ export const checkForAppointments = async (url) => {
       throw new Error('Keine URL angegeben');
     }
 
-    logger.info('Starte Termin-Prüfung', { url, debug: isDebug() });
+    logger.info('Starte Termin-Prüfung', { url, debug: DEBUG });
 
     const browser = await getBrowser();
 
@@ -289,13 +247,8 @@ export const checkForAppointments = async (url) => {
 
     page = await context.newPage();
 
-    logger.debug('Navigiere zur Seite');
-    await page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
-    });
-
-    await waitForPageLoad(page, 25000);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForLoadState('networkidle', { timeout: 25000 }).catch(() => {});
     await page.waitForTimeout(3000);
 
     const appointments = await extractAppointments(page);

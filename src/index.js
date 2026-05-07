@@ -7,7 +7,6 @@ import { notifyNewAppointments, sendStatusNotification } from './notifier.js';
 import {
   compareAppointments,
   updateAppointments,
-  getErrorCount,
   recordError,
   resetErrorCount,
 } from './storage.js';
@@ -42,11 +41,9 @@ const runCheck = async () => {
     const result = await checkForAppointments(process.env.TARGET_URL);
 
     if (!result.success) {
-      recordError();
-      const errorCount = getErrorCount();
+      const errorCount = recordError();
       logger.error(`Prüfung fehlgeschlagen (Fehler #${errorCount})`);
 
-      // Sende Status-Benachrichtigung nach 3 aufeinanderfolgenden Fehlern
       if (errorCount === 3) {
         await sendStatusNotification('⚠️ Mehrere Fehler bei Termin-Prüfung', true);
       }
@@ -83,9 +80,7 @@ const runCheck = async () => {
       logger.info('Keine Änderungen erkannt');
     }
 
-    // Setze Error-Counter zurück bei erfolgreicher Prüfung
-    if (getErrorCount() > 0) {
-      resetErrorCount();
+    if (resetErrorCount()) {
       logger.info('Error-Counter zurückgesetzt');
     }
 

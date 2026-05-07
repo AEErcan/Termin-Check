@@ -68,11 +68,8 @@ export const compareAppointments = (newAppointments) => {
   const storage = getStorage();
   const oldAppointments = storage.appointments || [];
 
-  // Normalisiere Termine für Vergleich (sortiert)
   const normalize = (appts) =>
-    appts
-      .map((a) => `${a.date}|${a.time}|${a.location || ''}`)
-      .sort();
+    appts.map((a) => `${a.date}|${a.time}|${a.location || ''}`);
 
   const oldSet = new Set(normalize(oldAppointments));
   const newSet = new Set(normalize(newAppointments));
@@ -151,6 +148,7 @@ export const recordError = () => {
   const storage = getStorage();
   storage.errorCount = (storage.errorCount || 0) + 1;
   saveStorage(storage);
+  return storage.errorCount;
 };
 
 /**
@@ -158,8 +156,10 @@ export const recordError = () => {
  */
 export const resetErrorCount = () => {
   const storage = getStorage();
+  if (!storage.errorCount) return false;
   storage.errorCount = 0;
   saveStorage(storage);
+  return true;
 };
 
 /**
