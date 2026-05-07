@@ -1,0 +1,49 @@
+name: Termin-Check
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Manuell ausführbar über GitHub UI
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Dependencies installieren
+        run: npm ci
+
+      - name: Playwright Browser cachen
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Playwright Chromium installieren
+        run: npx playwright install chromium --with-deps
+
+      - name: Gespeicherte Termine wiederherstellen
+        uses: actions/cache@v4
+        with:
+          path: storage.json
+          key: storage-${{ github.run_id }}
+          restore-keys: |
+            storage-
+
+      - name: Termin-Check ausführen
+        env:
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DEBUG: 'false'
+        run: node src/run-once.js

@@ -1,0 +1,29 @@
+{
+  "name": "appointment-monitor",
+  "version": "1.0.0",
+  "description": "Automatische Webseite-Überwachung für neue Termine mit Telegram-Benachrichtigungen",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "NODE_ENV=development node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "playwright",
+    "monitoring",
+    "telegram",
+    "appointments"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.48.0",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
