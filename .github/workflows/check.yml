@@ -2,7 +2,7 @@ name: Termin-Check
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Manuell ausführbar über GitHub UI
 
 jobs:
